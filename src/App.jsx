@@ -906,21 +906,14 @@ export default function CueApp() {
       }
   
       console.log("Using API key:", apiKey.substring(0, 15) + "...");
-  
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('/api/claude', {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-3-5-sonnet-20240620",
-          max_tokens: 1200,
-          temperature: 0.7,
-          messages: [{
-            role: "user",
-            content: `Analyze this transcript and return ONLY valid JSON.
+          transcript: full,
+          signalSummary: signalSummary
+        })
+      });
   
   TRANSCRIPT: "${full}"
   
