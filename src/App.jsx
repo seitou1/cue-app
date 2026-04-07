@@ -882,30 +882,19 @@ export default function CueApp() {
     const full = (transcript + " " + interim).trim();
     const wordCount = full.split(/\s+/).filter(Boolean).length;
     const currentElapsed = elapsedRef.current;
-  
+
     if (wordCount < MIN_WORDS || currentElapsed < MIN_SECONDS) {
       setError(`Keep going — ${Math.max(0, MIN_SECONDS - currentElapsed)}s more needed.`);
       return;
     }
-  
+
     stopAll();
     setView("analyzing");
-  
+
     const signals = computeSignals(full, currentElapsed);
-    const signalSummary = `COMPUTED SIGNALS: Words: ${signals.total} | ${fmt(currentElapsed)} | ${signals.wpm} WPM`;
-  
+    const signalSummary = `COMPUTED SIGNALS: Words: ${signals.total || 0} | ${fmt(currentElapsed)} | ${signals.wpm || 0} WPM`;
+
     try {
-      const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
-  
-      if (!apiKey) {
-        throw new Error("API key is missing. Please add VITE_ANTHROPIC_API_KEY on Vercel.");
-      }
-  
-      if (!apiKey.startsWith("sk-ant-")) {
-        throw new Error("Invalid Anthropic API key format.");
-      }
-  
-      console.log("Using API key:", apiKey.substring(0, 15) + "...");
       const res = await fetch('/api/claude', {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -914,74 +903,36 @@ export default function CueApp() {
           signalSummary: signalSummary
         })
       });
-  
-  TRANSCRIPT: "${full}"
-  
-  ${signalSummary}`
-          }]
-        })
-      });
-  
+
       if (!res.ok) {
         const errorText = await res.text().catch(() => "No error text");
-        throw new Error(`Claude API ${res.status}: ${errorText}`);
+        throw new Error(`HTTP ${res.status}: ${errorText}`);
       }
-  
+
       const data = await res.json();
       const raw = (data.content || []).map(b => b.text || "").join("");
-      
       const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
-  
+
       const entry = { 
         ...parsed, 
         id: Date.now(), 
         date: new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }), 
         duration: fmt(currentElapsed) 
       };
-  
+
       setAnalysis(entry);
       const updated = [entry, ...sessions].slice(0, 20);
       setSessions(updated);
       saveSessions(updated);
       setDailyCount(incDailyCount());
       setView("debrief");
-  
+
     } catch (err) {
       console.error("Analysis failed:", err);
-      setError(`Analysis failed: ${err.message}`);
+      setError(`Analysis failed: ${err.message || "Unknown error - check console"}`);
       setView("recording");
     }
   }, [transcript, interim, stopAll, sessions]);
-  const handleShare = useCallback(async () => {
-    if (!analysis || isSharing) return;
-    setIsSharing(true);
-    try {
-      const { default: html2canvas } = await import("html2canvas");
-      const canvas = await html2canvas(cueCardRef.current, { scale: 2, useCORS: true, backgroundColor: "#1C3A2E", logging: false });
-      let shared = false;
-      try {
-        await new Promise((resolve, reject) => {
-          canvas.toBlob(async (blob) => {
-            try { await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]); shared = true; resolve(); } catch { reject(); }
-          });
-        });
-        if (shared) showToast("✓ Cue Card copied to clipboard");
-      } catch {
-        const a = document.createElement("a");
-        a.href = canvas.toDataURL("image/png");
-        a.download = `cue-card-${analysis.overallScore}.png`;
-        a.click();
-        showToast("✓ Cue Card downloaded as PNG");
-      }
-    } catch {
-      const text = `My Cue scores:\n\nConviction ${analysis.conviction} · Clarity ${analysis.clarity} · Composure ${analysis.composure} · Connection ${analysis.connection}\n\nOverall: ${analysis.overallScore}/100\n\n"${analysis.coachingNote}"\n\ntrycue.app`;
-      try { await navigator.clipboard.writeText(text); showToast("✓ Score copied — add html2canvas for image sharing"); }
-      catch { showToast("Couldn't copy — select manually", "err-toast"); }
-    } finally {
-      setIsSharing(false);
-    }
-  }, [analysis, isSharing, showToast]);
-
   const reset = useCallback(() => {
     stopAll();
     setTranscript(""); setInterim(""); setElapsed(0); elapsedRef.current = 0;
