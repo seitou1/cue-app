@@ -878,7 +878,6 @@ export default function CueApp() {
       setError(err.message || "Microphone access denied. Check your browser settings.");
     }
   }, [dailyCount, showToast]);
-
   const finishAndAnalyze = useCallback(async () => {
     const full = (transcript + " " + interim).trim();
     const wordCount = full.split(/\s+/).filter(Boolean).length;
@@ -893,53 +892,43 @@ export default function CueApp() {
     setView("analyzing");
   
     const signals = computeSignals(full, currentElapsed);
-    const signalSummary = `
-  COMPUTED SIGNALS: Words: ${signals.total} | ${fmt(currentElapsed)} | ${signals.wpm} WPM | ${signals.wordsPerSentence} words/sentence
-  FPS rate: ${signals.fpsRate}% (${signals.fpsCount}) | Exclusive words: ${signals.exclusiveCount} (${signals.exclusiveRate}%)
-  Sensory: ${signals.sensory} | Temporal: ${signals.temporal} | Spatial: ${signals.spatial} | CogOps: ${signals.cogOps} | RM ratio: ${signals.rmRatio}
-  Fillers: ${signals.fillerRate}% | Hedges: ${signals.hedges} | NegEmo: ${signals.negEmoCount} | Complications: ${signals.complications}
-  Self-handicap: ${signals.selfHandicap} | Corrections: ${signals.corrections}
-  FLAGS: ${[signals.lowFPS&&"LOW_FPS",signals.highCogOps&&"HIGH_COGOPS",signals.highFillers&&"HIGH_FILLERS",signals.lowExclusive&&"LOW_EXCLUSIVE",signals.richSensory&&"RICH_SENSORY",signals.hasComplications&&"COMPLICATIONS",signals.hasSelfHandicap&&"SELF_HANDICAP",signals.hasCorrections&&"CORRECTIONS"].filter(Boolean).join(", ")||"none"}`;
+    const signalSummary = `COMPUTED SIGNALS: Words: ${signals.total} | ${fmt(currentElapsed)} | ${signals.wpm} WPM`;
   
     try {
+      console.log("Starting analysis with key:", import.meta.env.VITE_ANTHROPIC_API_KEY ? "Key present" : "MISSING KEY");
+  
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,   // ← This is the important line
+          "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
           model: "claude-3-5-sonnet-20240620",
-          max_tokens: 1500,
+          max_tokens: 1200,
           temperature: 0.7,
-          messages: [
-            {
-              role: "user",
-              content: `You are Cue's psycholinguistic analysis engine. Apply validated speech analysis frameworks to the transcript and computed signals.
+          messages: [{
+            role: "user",
+            content: `Analyze this transcript using speech analysis frameworks and return ONLY valid JSON.
   
-  FRAMEWORKS:
-  1. CBCA (Köhnken & Steller) — Truthfulness cues
-  2. Reality Monitoring (Johnson & Raye) — Perceptual vs cognitive details
-  3. Pennebaker LIWC — Pronoun use and emotional tone
-  4. Cognitive Load (Vrij) — Mental effort indicators
+  TRANSCRIPT: "${full}"
   
-  RULES: Frame as probabilistic communication patterns, not verdicts. Be specific and cite actual patterns from the text. Return ONLY valid JSON, no markdown, no extra text.
-  
-  Return this exact structure:
-  {"overallScore":0-100,"coachingNote":"sharp first-person headline insight","conviction":0-100,"clarity":0-100,"composure":0-100,"connection":0-100,"whatWorked":"2-3 sentences with specific evidence","whatToFix":"2-3 sentences with specific evidence","momentToWatch":"quote a specific phrase from the transcript and explain it","signals":{"narrativeDetail":{"level":"RICH|MODERATE|THIN","finding":"1-2 sentences with evidence"},"sensoryGrounding":{"level":"GROUNDED|MIXED|ABSTRACT","finding":"1-2 sentences"},"verbalImmediacy":{"level":"DIRECT|NEUTRAL|DISTANCING","finding":"1-2 sentences"},"cognitiveLoad":{"level":"FLUID|MODERATE|ELEVATED","finding":"1-2 sentences"},"synthesis":"2-3 sentences overall linguistic profile"}}
-  
-  TRANSCRIPT:\n"${full}"\n\n${signalSummary}`
-            }
-          ]
+  ${signalSummary}`
+          }]
         })
       });
   
+      console.log("Response status:", res.status);
+  
       if (!res.ok) {
-        throw new Error(`API error: ${res.status}`);
+        const errorText = await res.text();
+        throw new Error(`API Error ${res.status}: ${errorText}`);
       }
   
       const data = await res.json();
+      console.log("Claude response received");
+  
       const raw = (data.content || []).map(b => b.text || "").join("");
       const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
   
@@ -958,11 +947,11 @@ export default function CueApp() {
       setView("debrief");
   
     } catch (err) {
-      console.error("Analysis error:", err);
-      setError(`Analysis failed: ${err.message || "Check your API key and internet connection"}`);
+      console.error("Full analysis error:", err);
+      setError(`Analysis failed: ${err.message}`);
       setView("recording");
     }
-  }, [transcript, interim, stopAll, sessions]); 
+  }, [transcript, interim, stopAll, sessions]);
   const handleShare = useCallback(async () => {
     if (!analysis || isSharing) return;
     setIsSharing(true);
