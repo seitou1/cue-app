@@ -884,7 +884,7 @@ export default function CueApp() {
     const currentElapsed = elapsedRef.current;
   
     if (wordCount < MIN_WORDS || currentElapsed < MIN_SECONDS) {
-      setError(`Keep going — ${Math.max(0, MIN_SECONDS - currentElapsed)}s more needed for a useful debrief.`);
+      setError(`Keep going — ${Math.max(0, MIN_SECONDS - currentElapsed)}s more needed.`);
       return;
     }
   
@@ -895,13 +895,23 @@ export default function CueApp() {
     const signalSummary = `COMPUTED SIGNALS: Words: ${signals.total} | ${fmt(currentElapsed)} | ${signals.wpm} WPM`;
   
     try {
-      console.log("Starting analysis with key:", import.meta.env.VITE_ANTHROPIC_API_KEY ? "Key present" : "MISSING KEY");
+      const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
+  
+      if (!apiKey) {
+        throw new Error("API key is missing. Please add VITE_ANTHROPIC_API_KEY on Vercel.");
+      }
+  
+      if (!apiKey.startsWith("sk-ant-")) {
+        throw new Error("Invalid Anthropic API key format.");
+      }
+  
+      console.log("Using API key:", apiKey.substring(0, 15) + "...");
   
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
+          "x-api-key": apiKey,
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
@@ -910,7 +920,7 @@ export default function CueApp() {
           temperature: 0.7,
           messages: [{
             role: "user",
-            content: `Analyze this transcript using speech analysis frameworks and return ONLY valid JSON.
+            content: `Analyze this transcript and return ONLY valid JSON.
   
   TRANSCRIPT: "${full}"
   
@@ -919,17 +929,14 @@ export default function CueApp() {
         })
       });
   
-      console.log("Response status:", res.status);
-  
       if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`API Error ${res.status}: ${errorText}`);
+        const errorText = await res.text().catch(() => "No error text");
+        throw new Error(`Claude API ${res.status}: ${errorText}`);
       }
   
       const data = await res.json();
-      console.log("Claude response received");
-  
       const raw = (data.content || []).map(b => b.text || "").join("");
+      
       const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
   
       const entry = { 
@@ -947,7 +954,7 @@ export default function CueApp() {
       setView("debrief");
   
     } catch (err) {
-      console.error("Full analysis error:", err);
+      console.error("Analysis failed:", err);
       setError(`Analysis failed: ${err.message}`);
       setView("recording");
     }
