@@ -941,7 +941,12 @@ export default function CueApp() {
   }, [stopAll]);
 
   const readyToStop = liveMetrics.words >= MIN_WORDS && elapsed >= MIN_SECONDS;
-  const minProgress = Math.min(100, (elapsed / MIN_SECONDS) * 100);
+  const timeProgress = Math.min(100, (elapsed / MIN_SECONDS) * 100);
+  const wordProgress = Math.min(100, (liveMetrics.words / MIN_WORDS) * 100);
+  const minProgress = Math.min(timeProgress, wordProgress);
+  const minGuardLabel = wordProgress < timeProgress
+    ? `${Math.max(0, MIN_WORDS - liveMetrics.words)} words to go`
+    : `${Math.max(0, MIN_SECONDS - elapsed)}s until ready`;
 
   return (
     <>
@@ -1032,7 +1037,7 @@ export default function CueApp() {
 
             {!readyToStop && (
               <div className="min-guard">
-                <span>⏳ {Math.max(0, MIN_SECONDS - elapsed)}s until ready</span>
+                <span>⏳ {minGuardLabel}</span>
                 <div className="min-guard-bar">
                   <div className="min-guard-fill" style={{ width: `${minProgress}%` }} />
                 </div>
