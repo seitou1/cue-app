@@ -1074,7 +1074,7 @@ export default function CueApp() {
             <div className="record-controls">
               <button className="stop-btn" onClick={finishAndAnalyze} disabled={!readyToStop}>
                 <span className="stop-square" />
-                {readyToStop ? "Stop & Analyze" : `${Math.max(0, MIN_SECONDS - elapsed)}s until ready…`}
+                {readyToStop ? "Stop & Analyze" : minGuardLabel}
               </button>
               <button className="cancel-btn" onClick={() => { reset(); setView("home"); }}>Cancel</button>
             </div>
